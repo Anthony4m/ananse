@@ -22,7 +22,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	response := map[string]string{
-		"status":    "healthy",
+		"status":    "unhealthy",
 		"timestamp": time.Now().Format(time.RFC3339),
 	}
 
