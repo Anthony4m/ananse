@@ -92,10 +92,6 @@ func main() {
 	}
 
 	proxy.ModifyResponse = func(response *http.Response) error {
-		//Challenge: How can you change your ModifyResponse function to only read the body if the response.Request.URL.Path == "/health"?
-		//For all other requests, it should just let the original response.Body (which is a stream) pass through untouched.
-		//This way, you get high-performance streaming for 99% of your traffic, and conditional, in-memory buffering for the 1% you need to modify.
-		// TODO: find a way to address this issue
 		var bodyBytes []byte
 		if response.Request.URL.Path == "/health" {
 			bodyBytes, err = io.ReadAll(response.Body)
