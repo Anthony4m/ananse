@@ -1,0 +1,53 @@
+# Pod Kill Chaos - Randomly kill pods to test recovery
+# Tests: Circuit breaker, endpoint discovery, load balancing failover
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-random
+  namespace: ananse
+spec:
+  action: pod-kill
+  mode: one  # Kill one random pod
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      # Target any service pod
+      app.kubernetes.io/part-of: ananse-mesh
+  scheduler:
+    cron: "*/2 * * * *"  # Every 2 minutes
+---
+# Kill auth service pods specifically
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-auth
+  namespace: ananse
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: auth
+  scheduler:
+    cron: "*/5 * * * *"  # Every 5 minutes
+---
+# Pod failure - mark pod as failed without killing
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure
+  namespace: ananse
+spec:
+  action: pod-failure
+  mode: one
+  duration: "60s"
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: payments
+  scheduler:
+    cron: "*/10 * * * *"

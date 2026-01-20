@@ -1,0 +1,125 @@
+# Network Delay Chaos - Add latency to service responses
+# Tests: Timeout handling, retry logic, circuit breaker open threshold
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-auth
+  namespace: ananse
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: auth
+  delay:
+    latency: "200ms"
+    jitter: "50ms"
+    correlation: "25"
+  duration: "2m"
+  scheduler:
+    cron: "*/15 * * * *"
+---
+# High latency scenario - simulate cross-region calls
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-high
+  namespace: ananse
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: analytics
+  delay:
+    latency: "500ms"
+    jitter: "100ms"
+  duration: "3m"
+---
+# Packet loss - simulate unreliable network
+# Tests: Retry logic, request idempotency
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-loss
+  namespace: ananse
+spec:
+  action: loss
+  mode: all
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: users
+  loss:
+    loss: "10"        # 10% packet loss
+    correlation: "50"
+  duration: "5m"
+---
+# Network partition - isolate a service completely
+# Tests: Circuit breaker fast-fail, graceful degradation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-partition
+  namespace: ananse
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: payments
+  direction: both
+  target:
+    selector:
+      namespaces:
+        - ananse
+      labelSelectors:
+        app: proxy-gateway
+    mode: all
+  duration: "1m"
+---
+# Bandwidth limit - simulate throttled connection
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-bandwidth
+  namespace: ananse
+spec:
+  action: bandwidth
+  mode: all
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: analytics
+  bandwidth:
+    rate: "1mbps"
+    limit: 100
+    buffer: 10000
+  duration: "5m"
+---
+# DNS chaos - simulate DNS failures
+# Tests: Service discovery resilience
+apiVersion: chaos-mesh.org/v1alpha1
+kind: DNSChaos
+metadata:
+  name: dns-error
+  namespace: ananse
+spec:
+  action: error
+  mode: all
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: proxy-gateway
+  patterns:
+    - "auth.ananse.svc.cluster.local"
+  duration: "30s"

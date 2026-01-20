@@ -1,0 +1,61 @@
+# CPU Stress - Consume CPU resources
+# Tests: Service degradation under load, health check sensitivity
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: cpu-stress
+  namespace: ananse
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: auth
+  stressors:
+    cpu:
+      workers: 2
+      load: 80  # 80% CPU usage
+  duration: "2m"
+---
+# Memory stress - consume memory
+# Tests: OOM behavior, graceful degradation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: memory-stress
+  namespace: ananse
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: users
+  stressors:
+    memory:
+      workers: 1
+      size: "100Mi"
+  duration: "1m"
+---
+# Combined stress - realistic heavy load
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: combined-stress
+  namespace: ananse
+spec:
+  mode: all
+  selector:
+    namespaces:
+      - ananse
+    labelSelectors:
+      app: payments
+  stressors:
+    cpu:
+      workers: 1
+      load: 50
+    memory:
+      workers: 1
+      size: "50Mi"
+  duration: "3m"

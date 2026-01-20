@@ -25,6 +25,21 @@ spec:
         env:
         - name: PORT
           value: "5004"
+        - name: SERVICE_NAME
+          value: "analytics"
+        - name: DB_HOST
+          value: "postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: "ananse"
+        - name: DB_NAME
+          value: "ananse"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: postgres-password
         livenessProbe:
           httpGet:
             path: /health

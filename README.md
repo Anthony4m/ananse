@@ -127,13 +127,80 @@ Simulate high traffic with spikes and variable latency:
 ./load_test.sh
 ```
 
-### Chaos Engineering
+### Chaos Engineering (Local)
 
 Unleash the Chaos Monkey to randomly kill and revive backend services:
 
 ```bash
 ./chaos_monkey.sh
 ```
+
+### Kubernetes Chaos Engineering
+
+For production-grade chaos testing in Kubernetes, use the comprehensive chaos testing toolkit in the `chaos/` directory.
+
+#### Quick Start
+
+```bash
+# Port-forward the proxy (required for traffic generation)
+kubectl port-forward -n ananse svc/proxy 8089:8089 &
+
+# Run comprehensive traffic to all endpoints
+cd chaos && ./chaos.sh traffic-full http://localhost:8089 50 5
+
+# Start chaos loop (kills random pods every 30s for 5 minutes)
+./chaos.sh chaos-loop 30 300
+```
+
+#### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `kill-pod <service>` | Kill a random pod from a service |
+| `scale <service> <replicas>` | Scale a service up or down |
+| `network-delay <service> <latency>` | Add network latency (requires tc) |
+| `restart-deploy <service>` | Rolling restart a deployment |
+| `drain-node <node>` | Drain a node (careful!) |
+| `chaos-loop <interval> <duration>` | Continuous random chaos |
+| `traffic <url> <rps> <duration>` | Generate traffic to health endpoints |
+| `traffic-full <url> <rps> <duration>` | Generate traffic to ALL endpoints |
+| `traffic-cascade <url> <rps> <duration>` | Test service-to-service cascading |
+
+#### Traffic Generator (Go)
+
+For fine-grained control over traffic patterns:
+
+```bash
+cd chaos/traffic
+go build -o traffic-gen .
+
+# Uniform traffic at 100 RPS for 60 seconds
+./traffic-gen -url http://localhost:8089 -rps 100 -duration 60s -pattern uniform
+
+# Burst traffic (spikes to 5x RPS)
+./traffic-gen -url http://localhost:8089 -rps 50 -duration 2m -pattern burst
+
+# Cascade pattern (tests service-to-service communication)
+./traffic-gen -url http://localhost:8089 -rps 30 -duration 2m -pattern cascade
+```
+
+#### Chaos Mesh (Production-Grade)
+
+For advanced chaos scenarios, deploy [Chaos Mesh](https://chaos-mesh.org/):
+
+```bash
+# Install Chaos Mesh
+kubectl apply -f https://mirrors.chaos-mesh.org/v2.6.0/crd.yaml
+helm install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace
+
+# Apply chaos experiments
+kubectl apply -f chaos/mesh/pod-kill.yaml      # Random pod failures
+kubectl apply -f chaos/mesh/network-chaos.yaml # Network latency/loss
+kubectl apply -f chaos/mesh/stress-chaos.yaml  # CPU/memory stress
+kubectl apply -f chaos/mesh/workflow.yaml      # Combined chaos workflow
+```
+
+See `chaos/README.md` for detailed documentation on chaos testing strategies.
 
 ## 📊 Monitoring
 
@@ -158,7 +225,21 @@ ananse/
 │       ├── health.go       # Active health checking
 │       ├── circuit.go      # Circuit breaker implementation
 │       └── metrics.go      # Prometheus instrumentation
-├── chaos_monkey.sh     # Service disruption simulator
+├── controlplane/       # Kubernetes control plane integration
+│   ├── k8s-client.go       # K8s service discovery & informers
+│   └── file-client.go      # File-based configuration
+├── chaos/              # Kubernetes chaos engineering toolkit
+│   ├── chaos.sh            # Main chaos testing script
+│   ├── main.go             # Go-based chaos runner
+│   ├── traffic/            # Traffic generator
+│   │   └── main.go
+│   └── mesh/               # Chaos Mesh manifests
+│       ├── pod-kill.yaml
+│       ├── network-chaos.yaml
+│       ├── stress-chaos.yaml
+│       └── workflow.yaml
+├── k8s/                # Kubernetes deployment manifests
+├── chaos_monkey.sh     # Local service disruption simulator
 ├── load_test.sh        # High-concurrency stress test
 ├── start_services.sh   # Start all services helper
 └── docker-compose.yml  # Prometheus + Grafana stack

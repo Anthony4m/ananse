@@ -15,11 +15,24 @@ func (r *Router) FindService(req *http.Request) (string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// First try exact match
 	if methods, ok := r.routingTable.pathIndex[req.URL.Path]; ok {
 		if serviceName, ok := methods[req.Method]; ok {
 			return serviceName, nil
 		}
 	}
+
+	// Fall back to prefix matching (e.g., /auth/login matches /auth)
+	path := req.URL.Path
+	for routePath, methods := range r.routingTable.pathIndex {
+		// Check if request path starts with route path (prefix match)
+		if len(path) > len(routePath) && path[:len(routePath)] == routePath && (path[len(routePath)] == '/' || path[len(routePath)] == '?') {
+			if serviceName, ok := methods[req.Method]; ok {
+				return serviceName, nil
+			}
+		}
+	}
+
 	return "", fmt.Errorf("no service found for this route")
 }
 

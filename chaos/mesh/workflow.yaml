@@ -1,0 +1,192 @@
+# Chaos Workflow - Orchestrated multi-step chaos scenarios
+# This runs a sequence of chaos events to simulate real-world failures
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  name: mesh-resilience-test
+  namespace: ananse
+spec:
+  entry: main
+  templates:
+    - name: main
+      templateType: Serial
+      children:
+        - initial-delay
+        - pod-chaos-phase
+        - recovery-check
+        - network-chaos-phase
+        - recovery-check
+        - stress-chaos-phase
+        - final-recovery
+
+    # Initial delay to ensure traffic is flowing
+    - name: initial-delay
+      templateType: Suspend
+      deadline: 30s
+
+    # Phase 1: Pod failures
+    - name: pod-chaos-phase
+      templateType: Parallel
+      children:
+        - kill-random-pod
+        - scale-down-service
+
+    - name: kill-random-pod
+      templateType: PodChaos
+      deadline: 2m
+      podChaos:
+        action: pod-kill
+        mode: one
+        selector:
+          namespaces:
+            - ananse
+          labelSelectors:
+            app: auth
+
+    - name: scale-down-service
+      templateType: Suspend
+      deadline: 30s
+
+    # Recovery check
+    - name: recovery-check
+      templateType: Suspend
+      deadline: 60s
+
+    # Phase 2: Network issues
+    - name: network-chaos-phase
+      templateType: Parallel
+      children:
+        - network-delay
+        - network-loss
+
+    - name: network-delay
+      templateType: NetworkChaos
+      deadline: 2m
+      networkChaos:
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - ananse
+          labelSelectors:
+            app: users
+        delay:
+          latency: "300ms"
+          jitter: "100ms"
+
+    - name: network-loss
+      templateType: NetworkChaos
+      deadline: 2m
+      networkChaos:
+        action: loss
+        mode: one
+        selector:
+          namespaces:
+            - ananse
+          labelSelectors:
+            app: payments
+        loss:
+          loss: "15"
+
+    # Phase 3: Resource stress
+    - name: stress-chaos-phase
+      templateType: StressChaos
+      deadline: 2m
+      stressChaos:
+        mode: one
+        selector:
+          namespaces:
+            - ananse
+          labelSelectors:
+            app: analytics
+        stressors:
+          cpu:
+            workers: 1
+            load: 70
+
+    # Final recovery period
+    - name: final-recovery
+      templateType: Suspend
+      deadline: 120s
+---
+# Simpler workflow for quick testing
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  name: quick-chaos-test
+  namespace: ananse
+spec:
+  entry: main
+  templates:
+    - name: main
+      templateType: Serial
+      children:
+        - kill-pod
+        - wait
+        - network-delay
+        - wait
+
+    - name: kill-pod
+      templateType: PodChaos
+      deadline: 30s
+      podChaos:
+        action: pod-kill
+        mode: one
+        selector:
+          namespaces:
+            - ananse
+          labelSelectors:
+            app: auth
+
+    - name: wait
+      templateType: Suspend
+      deadline: 30s
+
+    - name: network-delay
+      templateType: NetworkChaos
+      deadline: 1m
+      networkChaos:
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - ananse
+          labelSelectors:
+            app: users
+        delay:
+          latency: "200ms"
+---
+# Scheduled chaos workflow - runs periodically
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: scheduled-chaos
+  namespace: ananse
+spec:
+  schedule: "0 */4 * * *"  # Every 4 hours
+  type: Workflow
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  workflow:
+    entry: main
+    templates:
+      - name: main
+        templateType: Serial
+        children:
+          - random-pod-kill
+          - cooldown
+
+      - name: random-pod-kill
+        templateType: PodChaos
+        deadline: 1m
+        podChaos:
+          action: pod-kill
+          mode: one
+          selector:
+            namespaces:
+              - ananse
+
+      - name: cooldown
+        templateType: Suspend
+        deadline: 5m

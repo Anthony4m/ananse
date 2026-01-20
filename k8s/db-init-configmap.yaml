@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: ananse
+data:
+  01-schemas.sql: |
+    -- Create schemas for each service
+    CREATE SCHEMA IF NOT EXISTS users;
+    CREATE SCHEMA IF NOT EXISTS payments;
+    CREATE SCHEMA IF NOT EXISTS analytics;
+
+  02-users.sql: |
+    -- Users service tables
+    CREATE TABLE IF NOT EXISTS users.accounts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        username VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- Create index for faster lookups
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users.accounts(username);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users.accounts(email);
+
+    -- Trigger to update updated_at
+    CREATE OR REPLACE FUNCTION users.update_updated_at()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS users_updated_at ON users.accounts;
+    CREATE TRIGGER users_updated_at
+        BEFORE UPDATE ON users.accounts
+        FOR EACH ROW
+        EXECUTE FUNCTION users.update_updated_at();
+
+  03-payments.sql: |
+    -- Payments service tables
+    CREATE TABLE IF NOT EXISTS payments.balances (
+        user_id UUID PRIMARY KEY,
+        balance DECIMAL(15,2) NOT NULL DEFAULT 1000.00,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS payments.transactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL,
+        amount DECIMAL(15,2) NOT NULL,
+        type VARCHAR(50) NOT NULL CHECK (type IN ('debit', 'credit')),
+        status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- Indexes for transaction queries
+    CREATE INDEX IF NOT EXISTS idx_transactions_user ON payments.transactions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_created ON payments.transactions(created_at);
+    CREATE INDEX IF NOT EXISTS idx_transactions_status ON payments.transactions(status);
+
+    -- Trigger to update balance updated_at
+    CREATE OR REPLACE FUNCTION payments.update_balance_timestamp()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS balance_updated_at ON payments.balances;
+    CREATE TRIGGER balance_updated_at
+        BEFORE UPDATE ON payments.balances
+        FOR EACH ROW
+        EXECUTE FUNCTION payments.update_balance_timestamp();
+
+  04-analytics.sql: |
+    -- Analytics service tables
+    CREATE TABLE IF NOT EXISTS analytics.events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        type VARCHAR(100) NOT NULL,
+        user_id VARCHAR(255),
+        data JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- Indexes for efficient querying
+    CREATE INDEX IF NOT EXISTS idx_events_type ON analytics.events(type);
+    CREATE INDEX IF NOT EXISTS idx_events_user ON analytics.events(user_id);
+    CREATE INDEX IF NOT EXISTS idx_events_created ON analytics.events(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_events_data ON analytics.events USING GIN(data);
+
+    -- Partitioning support (optional, for future scaling)
+    -- Events can be partitioned by created_at for better performance
+
+  05-seed.sql: |
+    -- Seed some initial test data
+    INSERT INTO users.accounts (id, username, email, password_hash)
+    VALUES
+        ('00000000-0000-0000-0000-000000000001', 'admin', 'admin@example.com', 'hashed_password'),
+        ('00000000-0000-0000-0000-000000000002', 'testuser', 'test@example.com', 'hashed_password'),
+        ('00000000-0000-0000-0000-000000000003', 'demo', 'demo@example.com', 'hashed_password')
+    ON CONFLICT (username) DO NOTHING;
+
+    INSERT INTO payments.balances (user_id, balance)
+    VALUES
+        ('00000000-0000-0000-0000-000000000001', 10000.00),
+        ('00000000-0000-0000-0000-000000000002', 5000.00),
+        ('00000000-0000-0000-0000-000000000003', 1000.00)
+    ON CONFLICT (user_id) DO NOTHING;

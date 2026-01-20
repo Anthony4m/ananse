@@ -25,6 +25,17 @@ spec:
         env:
         - name: PORT
           value: "5001"
+        - name: SERVICE_NAME
+          value: "auth"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: redis-password
         livenessProbe:
           httpGet:
             path: /health
